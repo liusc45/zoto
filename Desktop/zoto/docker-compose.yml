@@ -1,0 +1,40 @@
+version: "3.8"
+
+services:
+  zot:
+    image: ghcr.io/project-zot/zot:latest
+    container_name: zot
+    command: ["serve", "/etc/zot/config.json"]
+    expose:
+      - "5000"
+    volumes:
+      # Directorio de datos (misma carpeta que docker-compose.yml)
+      - ./data:/data:Z
+      # Configuración
+      - ./config.json:/etc/zot/config.json:ro,Z
+    restart: unless-stopped
+    networks:
+      - internal
+
+  caddy:
+    image: caddy:2
+    container_name: caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    env_file:
+      - .env
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro,Z
+      - ./env_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+    networks:
+      - internal
+
+networks:
+  internal:
+
+volumes:
+  caddy_data:
+  caddy_config:

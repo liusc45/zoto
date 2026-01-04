@@ -1,0 +1,45 @@
+{
+  servers {
+    protocols h1
+  }
+}
+
+{$CADDY_DOMAIN} {
+
+  # ADMIN first: docker login (GET /v2/) goes here
+  handle /v2/* {
+    basic_auth {
+      fer {$CADDY_ADMIN_PASSWORD_HASH}
+    }
+    reverse_proxy zot:5000
+  }
+
+  # READ-ONLY free: pull only
+  @readonly_pull {
+    path /v2/*
+    method GET HEAD
+  }
+  handle @readonly_pull {
+    basic_auth {
+      public {$CADDY_PUBLIC_PASSWORD_HASH}
+    }
+    reverse_proxy zot:5000
+  }
+
+  # Block push for non-admin
+  @readonly_block {
+    path /v2/*
+    method PUT POST PATCH DELETE
+  }
+  handle @readonly_block {
+    respond "registry is read-only" 403
+  }
+
+  # UI admin only
+  handle {
+    basic_auth {
+      fer {$CADDY_ADMIN_PASSWORD_HASH}
+    }
+    reverse_proxy zot:5000
+  }
+}
