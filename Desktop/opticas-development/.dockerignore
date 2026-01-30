@@ -1,0 +1,85 @@
+# Git
+.git
+.gitignore
+.github
+
+# Docker
+.dockerignore
+Dockerfile
+docker-compose*.yml
+
+# IDE files
+.idea
+.vscode
+*.sublime-workspace
+*.sublime-project
+nbproject
+
+# Dependency directories
+vendor
+node_modules
+
+# CodeIgniter specific
+writable/cache/*
+writable/logs/*
+writable/session/*
+writable/uploads/*
+writable/debugbar/*
+!writable/cache/index.html
+!writable/logs/index.html
+!writable/session/index.html
+!writable/uploads/index.html
+!writable/debugbar/index.html
+
+# Environment files
+.env
+.env.*
+!.env.example
+!.env.docker.example
+
+# Testing
+tests
+phpunit.xml*
+
+# Misc
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Backup files
+backup/
+backups/
+*.backup
+*.bak
+*.sql
+*.sqlite
+*.db
+
+# Logs and Temp
+*.log
+logs/
+tmp/
+temp/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+.circleci/
+
+# Build artifacts
+/public/assets/built
+/public/assets/dist
+.phpunit.result.cache
+.php_cs.cache
+
+# Documentation (exclude from context)
+README.md
+CHANGELOG.md
+CONTRIBUTING.md
+LICENSE
+docs/
+
+# Docker volumes
+docker/

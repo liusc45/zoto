@@ -1,0 +1,224 @@
+version: '3.8'
+
+services:
+  # ==========================================
+  # PHP-FPM Application Server
+  # ==========================================
+  app:
+    build:
+      context: .
+      target: ${BUILD_TARGET:-development}
+      args:
+        BUILD_TARGET: ${BUILD_TARGET:-development}
+    container_name: opticas-app
+    restart: unless-stopped
+    environment:
+      - CI_ENVIRONMENT=${CI_ENVIRONMENT:-development}
+      - database.default.hostname=db
+      - database.default.database=${DB_DATABASE:-optica_local}
+      - database.default.username=${DB_USER:-root}
+      - database.default.password=${DB_PASSWORD:-root}
+      - database.default.DBDriver=MySQLi
+      - database.default.port=3306
+      - app.baseURL=${APP_BASE_URL:-http://localhost}
+    volumes:
+      # Mount application code for development (comment for production)
+      - ./:/var/www/html
+      # Persistent writable directories
+      - app_cache:/var/www/html/writable/cache
+      - app_logs:/var/www/html/writable/logs
+      - app_session:/var/www/html/writable/session
+      - app_uploads:/var/www/html/public/uploads
+    networks:
+      - opticas-network
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "php-fpm-healthcheck"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+    # tty: true (for development - remove in production)
+
+  # ==========================================
+  # Caddy Web Server
+  # ==========================================
+  caddy:
+    image: caddy:2.7-alpine
+    container_name: opticas-caddy
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    environment:
+      - SERVER_NAME=${SERVER_NAME:-localhost}
+      - ACME_AGREE=true
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - app_uploads:/var/www/html/public/uploads:ro
+      - php_socket:/var/run/php-fpm:ro
+    networks:
+      - opticas-network
+    depends_on:
+      - app
+    healthcheck:
+      test: ["CMD", "caddy", "validate", "--config", "/etc/caddy/Caddyfile"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  # ==========================================
+  # MySQL Database
+  # ==========================================
+  db:
+    image: mysql:8.4
+    container_name: opticas-db
+    restart: unless-stopped
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-root}
+      - MYSQL_DATABASE=${DB_DATABASE:-optica_local}
+      - MYSQL_USER=${DB_USER:-optica_user}
+      - MYSQL_PASSWORD=${DB_PASSWORD:-optica_password}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/my.cnf:/etc/mysql/conf.d/custom.cnf:ro
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - opticas-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD:-root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ==========================================
+  # Redis Cache
+  # ==========================================
+  redis:
+    image: redis:7.2-alpine
+    container_name: opticas-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_password}
+    volumes:
+      - redis_data:/data
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    networks:
+      - opticas-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ==========================================
+  # phpMyAdmin (Optional - for development)
+  # ==========================================
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:5.2
+    container_name: opticas-phpmyadmin
+    restart: unless-stopped
+    ports:
+      - "${PMA_PORT:-8081}:80"
+    environment:
+      - PMA_HOST=db
+      - PMA_PORT=3306
+      - PMA_USER=root
+      - PMA_PASSWORD=${DB_ROOT_PASSWORD:-root}
+      - UPLOAD_LIMIT=512M
+      - MAX_EXECUTION_TIME=600
+      - MEMORY_LIMIT=512M
+      - PMA_ARBITRARY=1
+    volumes:
+      - ./docker/php/php.ini:/usr/local/etc/php/conf.d/custom.ini:ro
+      - pma_sessions:/var/www/html/tmp
+    networks:
+      - opticas-network
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles:
+      - dev
+
+  # ==========================================
+  # Worker (for background jobs)
+  # ==========================================
+  worker:
+    build:
+      context: .
+      target: ${BUILD_TARGET:-development}
+      args:
+        BUILD_TARGET: ${BUILD_TARGET:-development}
+    container_name: opticas-worker
+    restart: unless-stopped
+    command: php spark queue:work --tries=3 --timeout=90
+    environment:
+      - CI_ENVIRONMENT=${CI_ENVIRONMENT:-development}
+      - database.default.hostname=db
+      - database.default.database=${DB_DATABASE:-optica_local}
+      - database.default.username=${DB_USER:-root}
+      - database.default.password=${DB_PASSWORD:-root}
+      - database.default.DBDriver=MySQLi
+      - database.default.port=3306
+    volumes:
+      - ./:/var/www/html
+      - app_cache:/var/www/html/writable/cache
+      - app_logs:/var/www/html/writable/logs
+      - app_uploads:/var/www/html/public/uploads
+    networks:
+      - opticas-network
+    depends_on:
+      - db
+      - redis
+    profiles:
+      - worker
+
+networks:
+  opticas-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  # Database data
+  mysql_data:
+    driver: local
+
+  # PHP-FPM socket
+  php_socket:
+    driver: local
+
+  # Caddy data
+  caddy_data:
+    driver: local
+
+  # Caddy configuration
+  caddy_config:
+    driver: local
+
+  # Application volumes
+  app_cache:
+    driver: local
+  app_logs:
+    driver: local
+  app_session:
+    driver: local
+  app_uploads:
+    driver: local
+
+  # Redis data
+  redis_data:
+    driver: local
+
+  # phpMyAdmin sessions
+  pma_sessions:
+    driver: local

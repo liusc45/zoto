@@ -1,0 +1,48 @@
+GET {{host}}/patient
+
+
+###
+POST {{host}}/patient
+Content-Type: application/x-www-form-urlencoded
+Accept: application/json
+cookie:ci_session=lnc3uqjt2tug0okjbm4l9hne6roimknv
+
+name=admin &
+last_name=optica &
+dob=1983-09-29 &
+street=algo &
+city=algo &
+state=algo &
+postal_code=91000 &
+email = admin@optica.com &
+password = optica?25 &
+confirm_password = optica?25
+
+###
+
+PUT {{host}}/person/2
+
+# /Person::update($1)
+Content-Type: application/x-www-form-urlencoded
+Accept: application/json
+
+name = Guillermo
+
+###
+DELETE {{host}}/patient/2
+
+###
+POST {{host}}/patient/2
+Content-Type: application/x-www-form-urlencoded
+Accept: application/json
+
+_method=DELETE
+
+
+###
+POST https://api.idrivee2.com/api/service/get_region_end_point
+Content-Type: application/json
+
+{
+"access_key" : "MEWLRoeKzp0J3qVVUR0Y"
+}

@@ -1,0 +1,151 @@
+# Caddyfile for Opticas-Development
+# Reverse proxy configuration for PHP-FPM
+
+{
+    # Global options
+    auto_https off
+    # auto_https on  # Enable for production with valid domain
+    servers {
+        protocols h1 h2 h3
+    }
+    admin :2019
+}
+
+# ==========================================
+# Development/Local Environment
+# ==========================================
+:80 {
+    # Security headers
+    header {
+        X-Frame-Options "SAMEORIGIN"
+        X-Content-Type-Options "nosniff"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+        -Server
+    }
+
+    # Handle PHP-FPM via fastcgi
+    php_fastcgi unix//var/run/php-fpm/php-fpm.sock {
+        transport unix {
+            socket /var/run/php-fpm/php-fpm.sock
+        }
+        try_files {path} {path}/index.php?{query}
+        index index.php
+        read_timeout 60s
+        send_timeout 60s
+    }
+
+    # File upload limits
+    request_body {
+        max_size 512MB
+    }
+
+    # Static files caching
+    @static {
+        path *.ico *.css *.js *.gif *.jpg *.jpeg *.png *.svg *.woff *.woff2 *.ttf *.eot *.webp *.json
+    }
+    header @static Cache-Control "public, max-age=31536000, immutable"
+
+    # Gzip compression
+    encode {
+        zstd
+        gzip 5
+    }
+
+    # Handle OPTIONS requests (CORS)
+    @options method OPTIONS
+    respond @options "" 204
+
+    # Log access
+    log {
+        output file /var/log/caddy/access.log
+        format console
+        level INFO
+    }
+
+    # Error pages
+    handle_errors {
+        @404 {
+            expression {http.error.status_code} == 404
+        }
+        respond @404 "Not Found" 404
+
+        @500 {
+            expression {http.error.status_code} >= 500
+        }
+        respond @500 "Internal Server Error" 500
+    }
+}
+
+# ==========================================
+# Production Configuration (with SSL)
+# ==========================================
+# Uncomment and configure for production
+
+# https://opticas.tudominio.com {
+#     root * /var/www/html/public
+#     
+#     # Security headers
+#     header {
+#         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+#         X-Frame-Options "SAMEORIGIN"
+#         X-Content-Type-Options "nosniff"
+#         X-XSS-Protection "1; mode=block"
+#         Referrer-Policy "strict-origin-when-cross-origin"
+#         Permissions-Policy "camera=(), microphone=(), geolocation=()"
+#         -Server
+#     }
+#     
+#     # PHP-FPM via fastcgi
+#     php_fastcgi unix//var/run/php-fpm/php-fpm.sock {
+#         transport unix {
+#             socket /var/run/php-fpm/php-fpm.sock
+#         }
+#         try_files {path} {path}/index.php?{query}
+#         index index.php
+#         read_timeout 60s
+#         send_timeout 60s
+#     }
+#     
+#     # File upload limits
+#     request_body {
+#         max_size 512MB
+#     }
+#     
+#     # Static files caching
+#     @static {
+#         path *.ico *.css *.js *.gif *.jpg *.jpeg *.png *.svg *.woff *.woff2 *.ttf *.eot *.webp *.json
+#     }
+#     header @static Cache-Control "public, max-age=31536000, immutable"
+#     
+#     # Gzip compression
+#     encode {
+#         zstd
+#         gzip 5
+#     }
+#     
+#     # CORS handling (if needed)
+#     @options method OPTIONS
+#     respond @options "" 204
+#     
+#     # Log access
+#     log {
+#         output file /var/log/caddy/access.log
+#         format console
+#         level INFO
+#     }
+#     
+#     # Error pages
+#     handle_errors {
+#         @404 {
+#             expression {http.error.status_code} == 404
+#         }
+#         respond @404 "/var/www/html/public/errors/404.html" 404
+#         
+#         @500 {
+#             expression {http.error.status_code} >= 500
+#         }
+#         respond @500 "/var/www/html/public/errors/500.html" 500
+#     }
+# }
